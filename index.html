@@ -51,6 +51,11 @@
             width: 100%;
             resize: none;
         }
+
+        #typeRelation {
+            width: 100%;
+            height: 30px;
+        }
     </style>
 
     <script>
@@ -211,16 +216,13 @@
                 });
                 view.graphics.add(graphic);
                 if (completed) {
-                    // SPATIAL RELATIONSHIP
-                    //esriSpatialRelIntersects
-                    //esriSpatialRelContains
-                    //esriSpatialRelEnvelopeIntersects
-                    //esriSpatialRelOverlaps
+                    //document.getElementById("typeRelation")
+                    const spatialRel = document.getElementById("typeRelation").selectedOptions[0].value;
                     const queryFeature = query.executeQueryJSON(urlLotes, {
                         outFields: ['*'],
                         returnGeometry: true,
                         geometry: polygon,
-                        spatialRelationship: 'esriSpatialRelIntersects'
+                        spatialRelationship: spatialRel
                     })
                         .then(response => {
                             const features = response.features;
@@ -265,6 +267,11 @@
                 </li>
             </ul>
             <hr>
+            <select id="typeRelation">
+                <option value="esriSpatialRelIntersects">Intersects</option>
+                <option value="esriSpatialRelContains">Contains</option>
+                <option value="esriSpatialRelOverlaps">Overlaps</option>
+            </select>
             <h3>Seleccionar espacialmente</h3>
             <button id="drawPolygon">dibujar poligono</button>
             <hr>
