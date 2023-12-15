@@ -1,0 +1,277 @@
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>UVR multiple values</title>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.28/"></script>
+
+    <style>
+        html,
+        body,
+        .mainContainer {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            display: flex;
+            flex-direction: row;
+        }
+
+        .widget {
+            height: 100%;
+            width: 20%;
+            padding: 10px;
+        }
+
+        #map {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+
+        #drawPolygon {
+            height: 40px;
+            width: 100%;
+            border: none;
+            background-color: #0079c1;
+            color: white;
+            cursor: hand;
+        }
+
+        #drawPolygon:hover {
+            background-color: #005a8e;
+        }
+
+        #selectedFeaturesContent {
+            height: 300px;
+            width: 100%;
+            resize: none;
+        }
+    </style>
+
+    <script>
+        require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/layers/FeatureLayer",
+            "esri/rest/query",
+            "esri/views/draw/PolygonDrawAction",
+            "esri/views/draw/Draw",
+            "esri/Graphic"
+        ], function (
+            Map,
+            MapView,
+            FeatureLayer,
+            query,
+            PolygonDrawAction,
+            Draw,
+            Graphic
+        ) {
+
+            // @params
+            const urlLotes = `https://ws.mineco.gob.pe/serverdf/rest/services/Hosted/LotesAreaServicioAlojadoTest/FeatureServer/0`;
+            const fids = [];
+
+            const map = new Map({
+                basemap: "topo-vector"
+            });
+
+            const view = new MapView({
+                container: "map",
+                map: map,
+                center: [-76.96, -12.01],
+                zoom: 18
+            });
+
+            const featureLayer = new FeatureLayer({
+                url: urlLotes,
+            });
+
+            map.add(featureLayer);
+
+            const draw = new Draw({
+                view: view
+            });
+
+            const symbol = {
+                type: "simple-fill",
+                color: [255, 0, 0, 0.5],
+                outline: {
+                    color: [255, 255, 255],
+                    width: 1
+                }
+            };
+
+            const symbolDrawPolygon = {
+                type: "simple-fill",
+                color: "rgba(168, 0, 0, 0.17)",
+                style: "solid",
+                opacity: 0.3,
+                outline: {
+                    color: "red",
+                    width: 1
+                }
+            }
+
+            function selectFeatureByCheckbox() {
+                const checkbox = document.querySelectorAll(".checkFeature:checked");
+                const values = [];
+                checkbox.forEach((item) => {
+                    values.push(item.value);
+                });
+                const query = featureLayer.createQuery();
+                query.where = `fid IN (${values})`;
+                featureLayer.definitionExpression = query.where;
+            };
+
+            function selectedFeature(evt) {
+                view.graphics.removeMany(view.graphics.filter(graphic => {
+                    return graphic.id === 'selectedFeature';
+                }));
+                const checkbox = evt.target;
+                if (checkbox.checked) {
+                    fids.push(checkbox.value);
+
+                } else {
+                    fids.splice(fids.indexOf(checkbox.value), 1);
+                }
+                const where = `fid IN (${fids})`;
+                const queryFeature = query.executeQueryJSON(urlLotes, {
+                    where: where,
+                    outFields: ['*'],
+                    returnGeometry: true
+                })
+                    .then(response => {
+                        const features = response.features;
+                        const graphics = features.map(feature => {
+                            return {
+                                geometry: feature.geometry,
+                                symbol: symbol,
+                                id: 'selectedFeature'
+                            }
+                        });
+                        view.graphics.addMany(graphics);
+                        view.goTo({ target: features, zoom: 19 });
+                    })
+                    .catch(error => {
+                        console.log(error);
+                    })
+
+            };
+
+            document.querySelectorAll(".checkFeature").forEach((item) => {
+                item.addEventListener("change", (evt) => {
+                    selectedFeature(evt);
+                });
+            });
+
+            function enableCreatePolygon(draw, view) {
+                let action = draw.create("polygon");
+
+                // PolygonDrawAction.vertex-add
+                // Fires when user clicks, or presses the "F" key.
+                // Can also be triggered when the "R" key is pressed to redo.
+                action.on("vertex-add", function (evt) {
+                    createPolygonGraphic(evt.vertices);
+                });
+
+                // PolygonDrawAction.vertex-remove
+                // Fires when the "Z" key is pressed to undo the last added vertex
+                action.on("vertex-remove", function (evt) {
+                    createPolygonGraphic(evt.vertices);
+                });
+
+                // Fires when the pointer moves over the view
+                action.on("cursor-update", function (evt) {
+                    createPolygonGraphic(evt.vertices);
+                });
+
+                // Add a graphic representing the completed polygon
+                // when user double-clicks on the view or presses the "Enter" key
+                action.on("draw-complete", function (evt) {
+                    createPolygonGraphic(evt.vertices, true);
+                });
+            }
+
+            function createPolygonGraphic(vertices, completed = false) {
+                view.graphics.removeAll();
+                let polygon = {
+                    type: "polygon", // autocasts as Polygon
+                    rings: vertices,
+                    spatialReference: view.spatialReference
+                };
+
+                let graphic = new Graphic({
+                    geometry: polygon,
+                    symbol: symbolDrawPolygon,
+                });
+                view.graphics.add(graphic);
+                if (completed) {
+                    // SPATIAL RELATIONSHIP
+                    //esriSpatialRelIntersects
+                    //esriSpatialRelContains
+                    //esriSpatialRelEnvelopeIntersects
+                    //esriSpatialRelOverlaps
+                    const queryFeature = query.executeQueryJSON(urlLotes, {
+                        outFields: ['*'],
+                        returnGeometry: true,
+                        geometry: polygon,
+                        spatialRelationship: 'esriSpatialRelIntersects'
+                    })
+                        .then(response => {
+                            const features = response.features;
+                            const graphics = features.map(feature => {
+                                return {
+                                    geometry: feature.geometry,
+                                    symbol: symbol,
+                                    id: 'selectedFeature'
+                                }
+                            });
+                            view.graphics.addMany(graphics);
+                            view.goTo({ target: features, zoom: 19 });
+                            document.getElementById("selectedFeaturesContent").value = JSON.stringify(features);
+                        })
+                        .catch(error => console.log(error))
+                }
+            }
+            document.getElementById("drawPolygon").onclick = () => {
+                enableCreatePolygon(draw, view)
+
+            };
+        });
+    </script>
+</head>
+
+<body>
+    <div class="mainContainer">
+        <div class="widget">
+            <h3>Seleccionar por checkbox</h3>
+            <ul>
+                <li>
+                    <input type="checkbox" class="checkFeature" value="50">
+                    <label>50</label>
+                </li>
+                <li>
+                    <input type="checkbox" class="checkFeature" value="51">
+                    <label>51</label>
+                </li>
+                <li>
+                    <input type="checkbox" class="checkFeature" value="52">
+                    <label>52</label>
+                </li>
+            </ul>
+            <hr>
+            <h3>Seleccionar espacialmente</h3>
+            <button id="drawPolygon">dibujar poligono</button>
+            <hr>
+            <textarea id="selectedFeaturesContent" readonly></textarea>
+        </div>
+        <div id="map"></div>
+    </div>
+</body>
+
+</html>
