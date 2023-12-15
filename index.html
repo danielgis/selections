@@ -122,17 +122,6 @@
                 }
             }
 
-            function selectFeatureByCheckbox() {
-                const checkbox = document.querySelectorAll(".checkFeature:checked");
-                const values = [];
-                checkbox.forEach((item) => {
-                    values.push(item.value);
-                });
-                const query = featureLayer.createQuery();
-                query.where = `fid IN (${values})`;
-                featureLayer.definitionExpression = query.where;
-            };
-
             function selectedFeature(evt) {
                 view.graphics.removeMany(view.graphics.filter(graphic => {
                     return graphic.id === 'selectedFeature';
